@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Space Invaders Clone</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
             height: 100vh;
             background-color: #000;
@@ -18,13 +19,14 @@
         }
         #gameCanvas {
             border: 2px solid #fff;
+            margin-top: 20px;
         }
         #controls {
-            position: absolute;
-            bottom: 20px;
             display: flex;
             justify-content: space-between;
-            width: 300px;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .control-btn {
             width: 80px;
@@ -39,32 +41,8 @@
             color: #fff;
             user-select: none;
         }
-        #highScoreBoard {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            border: 2px solid #fff;
-            padding: 20px;
-            color: #fff;
-            text-align: center;
-            display: none;
-        }
-        #highScoreBoard h2 {
-            margin-top: 0;
-        }
-        #highScoreList {
-            list-style-type: none;
-            padding: 0;
-        }
-        #restartBtn {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
+        #fireBtn {
+            background-color: rgba(0, 255, 0, 0.2);
         }
     </style>
 </head>
@@ -75,18 +53,11 @@
         <div id="fireBtn" class="control-btn">🔥</div>
         <div id="rightBtn" class="control-btn">▶</div>
     </div>
-    <div id="highScoreBoard">
-        <h2>Game Over</h2>
-        <p>Your Score: <span id="finalScore"></span></p>
-        <h3>High Scores</h3>
-        <ol id="highScoreList"></ol>
-        <button id="restartBtn">Restart Game</button>
-    </div>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         canvas.width = 300;
-        canvas.height = 400;
+        canvas.height = window.innerHeight - 150; // Adjust height to fit above controls
 
         const player = {
             x: canvas.width / 2 - 15,
@@ -103,7 +74,6 @@
         let gameLoop;
         let score = 0;
         let lives = 8;
-        let highScores = JSON.parse(localStorage.getItem('highScores')) || [];
 
         function drawPlayer() {
             ctx.fillStyle = 'lime';
@@ -150,14 +120,14 @@
         }
 
         function checkCollisions() {
-            bullets.forEach(bullet => {
-                enemies.forEach((enemy, index) => {
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach((enemy, eIndex) => {
                     if (bullet.x < enemy.x + enemy.width &&
                         bullet.x + 3 > enemy.x &&
                         bullet.y < enemy.y + enemy.height &&
                         bullet.y + 10 > enemy.y) {
-                        enemies.splice(index, 1);
-                        bullets.splice(bullets.indexOf(bullet), 1);
+                        enemies.splice(eIndex, 1);
+                        bullets.splice(bIndex, 1);
                         score += 10;
                     }
                 });
@@ -176,31 +146,9 @@
 
         function gameOver() {
             cancelAnimationFrame(gameLoop);
-            updateHighScores();
-            showHighScoreBoard();
-        }
-
-        function updateHighScores() {
-            highScores.push(score);
-            highScores.sort((a, b) => b - a);
-            highScores = highScores.slice(0, 5);
-            localStorage.setItem('highScores', JSON.stringify(highScores));
-        }
-
-        function showHighScoreBoard() {
-            const highScoreBoard = document.getElementById('highScoreBoard');
-            const finalScoreSpan = document.getElementById('finalScore');
-            const highScoreList = document.getElementById('highScoreList');
-
-            finalScoreSpan.textContent = score;
-            highScoreList.innerHTML = '';
-            highScores.forEach((score, index) => {
-                const li = document.createElement('li');
-                li.textContent = `${index + 1}. ${score}`;
-                highScoreList.appendChild(li);
-            });
-
-            highScoreBoard.style.display = 'block';
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
+            ctx.fillText('Game Over', canvas.width / 2 - 70, canvas.height / 2);
         }
 
         function update() {
@@ -244,9 +192,6 @@
             rightBtn.addEventListener('touchstart', () => movePlayer(1));
             rightBtn.addEventListener('touchend', stopPlayer);
             fireBtn.addEventListener('touchstart', fireBullet);
-
-            const restartBtn = document.getElementById('restartBtn');
-            restartBtn.addEventListener('click', restartGame);
         }
 
         let movementInterval;
@@ -270,19 +215,9 @@
             });
         }
 
-        function restartGame() {
-            score = 0;
-            lives = 8;
-            enemies.length = 0;
-            bullets.length = 0;
-            initEnemies();
-            document.getElementById('highScoreBoard').style.display = 'none';
-            update();
-        }
-
         initEnemies();
         addTouchListeners();
-        update();
+        update(); // Start the game loop
     </script>
 </body>
-  </html>
+</html>

@@ -19,18 +19,18 @@
         }
         #gameCanvas {
             border: 2px solid #fff;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         #controls {
             display: flex;
             justify-content: space-between;
             width: 100%;
-            padding: 20px;
+            padding: 10px;
             box-sizing: border-box;
         }
         .control-btn {
-            width: 80px;
-            height: 80px;
+            width: 60px;
+            height: 60px;
             background-color: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
@@ -57,7 +57,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         canvas.width = 300;
-        canvas.height = window.innerHeight - 150; // Adjust height to fit above controls
+        canvas.height = window.innerHeight - 100; // Adjust height to fit screen
 
         const player = {
             x: canvas.width / 2 - 15,
@@ -74,6 +74,7 @@
         let gameLoop;
         let score = 0;
         let lives = 8;
+        let frameCount = 0;
 
         function drawPlayer() {
             ctx.fillStyle = 'lime';
@@ -152,6 +153,7 @@
         }
 
         function update() {
+            frameCount++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawPlayer();
             drawBullets();
@@ -165,6 +167,11 @@
             if (enemies.length === 0) {
                 initEnemies();
             }
+
+            // Debug info
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.fillText(`Frame: ${frameCount}`, 10, canvas.height - 10);
 
             gameLoop = requestAnimationFrame(update);
         }
@@ -218,6 +225,9 @@
         initEnemies();
         addTouchListeners();
         update(); // Start the game loop
+
+        // Debug: Log to console to ensure script is running
+        console.log("Game initialized");
     </script>
 </body>
 </html>

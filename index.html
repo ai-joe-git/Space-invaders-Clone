@@ -34,6 +34,37 @@
             font-weight: bold;
             text-shadow: 0 0 5px #30cfd0;
         }
+        #leaderboard {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            border: 2px solid #30cfd0;
+            padding: 20px;
+            color: #fff;
+            display: none;
+        }
+        #leaderboard h2 {
+            text-align: center;
+            margin-top: 0;
+        }
+        #leaderboard-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        #leaderboard-list li {
+            margin-bottom: 5px;
+        }
+        #close-leaderboard {
+            display: block;
+            margin: 10px auto 0;
+            padding: 5px 10px;
+            background-color: #30cfd0;
+            border: none;
+            color: #000;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -44,6 +75,11 @@
             <div id="level" class="info">Level: 1</div>
             <div id="high-score" class="info">High Score: 0</div>
             <div id="lives" class="info">Lives: 3</div>
+        </div>
+        <div id="leaderboard">
+            <h2>High Scores</h2>
+            <ol id="leaderboard-list"></ol>
+            <button id="close-leaderboard">Close</button>
         </div>
     </div>
 
@@ -57,12 +93,16 @@
             width: 40,
             height: 40,
             speed: 5,
-            speedX: 0
+            speedX: 0,
+            shieldActive: false,
+            shieldTimer: 0
         };
 
         const aliens = [];
         const bullets = [];
         const explosions = [];
+        const powerUps = [];
+        let boss = null;
         let score = 0;
         let level = 1;
         let highScore = localStorage.getItem('highScore') || 0;
@@ -78,9 +118,16 @@
             TOUGH: 'tough'
         };
 
+        const POWERUP_TYPES = {
+            SHIELD: 'shield',
+            EXTRA_LIFE: 'extra_life',
+            RAPID_FIRE: 'rapid_fire'
+        };
+
         function initGame() {
             document.addEventListener('keydown', handleKeyPress);
             document.addEventListener('keyup', handleKeyRelease);
+            document.getElementById('close-leaderboard').addEventListener('click', closeLeaderboard);
             createAliens();
             requestAnimationFrame(gameLoop);
         }
@@ -89,6 +136,7 @@
             if (e.key === 'ArrowLeft') spaceship.speedX = -spaceship.speed;
             if (e.key === 'ArrowRight') spaceship.speedX = spaceship.speed;
             if (e.key === ' ') shootBullet();
+            if (e.key === 'l') showLeaderboard();
         }
 
         function handleKeyRelease(e) {
@@ -141,12 +189,16 @@
             updateAliens(deltaTime);
             updateBullets(deltaTime);
             updateExplosions(deltaTime);
+            updatePowerUps(deltaTime);
+            if (boss) updateBoss(deltaTime);
             checkCollisions();
 
             drawSpaceship();
             drawAliens();
             drawBullets();
             drawExplosions();
+            drawPowerUps();
+            if (boss) drawBoss();
 
             updateInfoPanel();
 
@@ -156,6 +208,13 @@
         function updateSpaceship(deltaTime) {
             spaceship.x += spaceship.speedX * deltaTime * 60;
             spaceship.x = Math.max(0, Math.min(canvas.width - spaceship.width, spaceship.x));
+
+            if (spaceship.shieldActive) {
+                spaceship.shieldTimer -= deltaTime;
+                if (spaceship.shieldTimer <= 0) {
+                    spaceship.shieldActive = false;
+                }
+            }
         }
 
         function updateAliens(deltaTime) {
@@ -179,6 +238,10 @@
                     alien.y += alienAdvanceDistance;
                 });
             }
+
+            if (Math.random() < 0.001) {
+                spawnPowerUp();
+            }
         }
 
         function updateBullets(deltaTime) {
@@ -195,6 +258,28 @@
                     explosions.splice(index, 1);
                 }
             });
+        }
+
+        function updatePowerUps(deltaTime) {
+            powerUps.forEach((powerUp, index) => {
+                powerUp.y += powerUp.speed * deltaTime * 60;
+                if (powerUp.y > canvas.height) {
+                    powerUps.splice(index, 1);
+                }
+            });
+        }
+
+        function updateBoss(deltaTime) {
+            boss.x += boss.speed * deltaTime * 60;
+            if (boss.x <= 0 || boss.x + boss.width >= canvas.width) {
+                boss.speed *= -1;
+            }
+
+            boss.shootTimer -= deltaTime;
+            if (boss.shootTimer <= 0) {
+                bossShooting();
+                boss.shootTimer = 2;
+            }
         }
 
         function checkCollisions() {
@@ -215,17 +300,43 @@
                             score += alien.type === ALIEN_TYPES.TOUGH ? 30 : 10;
                         }
 
-                        if (aliens.length === 0) levelUp();
+                        if (aliens.length === 0) {
+                            if (boss) {
+                                levelUp();
+                            } else {
+                                spawnBoss();
+                            }
+                        }
                     }
                 });
+
+                if (boss && checkCollision(bullet, boss)) {
+                    bullets.splice(bulletIndex, 1);
+                    boss.health--;
+                    if (boss.health <= 0) {
+                        createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, true);
+                        boss = null;
+                        score += 100;
+                        levelUp();
+                    }
+                }
             });
 
             aliens.forEach(alien => {
                 if (checkCollision(alien, spaceship) || alien.y + alien.height >= canvas.height) {
-                    lives--;
-                    createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
-                    if (lives <= 0) gameOver();
-                    else resetLevel();
+                    if (!spaceship.shieldActive) {
+                        lives--;
+                        createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
+                        if (lives <= 0) gameOver();
+                        else resetLevel();
+                    }
+                }
+            });
+
+            powerUps.forEach((powerUp, index) => {
+                if (checkCollision(powerUp, spaceship)) {
+                    applyPowerUp(powerUp.type);
+                    powerUps.splice(index, 1);
                 }
             });
         }
@@ -261,7 +372,68 @@
             });
         }
 
-        function drawSpaceship() {
+        function spawnPowerUp() {
+            const types = Object.values(POWERUP_TYPES);
+            const type = types[Math.floor(Math.random() * types.length)];
+            powerUps.push({
+                x: Math.random() * (canvas.width - 20),
+                y: 0,
+                width: 20,
+                height: 20,
+                speed: 2,
+                type: type
+            });
+        }
+
+        function applyPowerUp(type) {
+            switch (type) {
+                case POWERUP_TYPES.SHIELD:
+                    spaceship.shieldActive = true;
+                    spaceship.shieldTimer = 10;
+                    break;
+                case POWERUP_TYPES.EXTRA_LIFE:
+                    lives++;
+                    break;
+                case POWERUP_TYPES.RAPID_FIRE:
+                    // Implement rapid fire logic here
+                    break;
+            }
+        }
+
+        function spawnBoss() {
+            boss = {
+                x: canvas.width / 2 - 75,
+                y: 50,
+                width: 150,
+                height: 100,
+                speed: 2,
+                health: 20,
+                shootTimer: 2
+            };
+        }
+
+        function bossShooting() {
+            const bulletSpeed = 5;
+            const bulletDirections = [
+                { dx: 0, dy: 1 },
+                { dx: -0.5, dy: 0.866 },
+                { dx: 0.5, dy: 0.866 }
+            ];
+
+            bulletDirections.forEach(dir => {
+                bullets.push({
+                    x: boss.x + boss.width / 2,
+                    y: boss.y + boss.height,
+                    width: 6,
+                    height: 6,
+                    speed: bulletSpeed,
+                    dx: dir.dx,
+                    dy: dir.dy
+                });
+            });
+        }
+
+function drawSpaceship() {
             ctx.fillStyle = '#30cfd0';
             ctx.beginPath();
             ctx.moveTo(spaceship.x + spaceship.width / 2, spaceship.y);
@@ -269,31 +441,21 @@
             ctx.lineTo(spaceship.x + spaceship.width, spaceship.y + spaceship.height);
             ctx.closePath();
             ctx.fill();
+
+            if (spaceship.shieldActive) {
+                ctx.strokeStyle = 'rgba(48, 207, 208, 0.5)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2, spaceship.width / 2 + 10, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
 
         function drawAliens() {
             aliens.forEach(alien => {
-                switch (alien.type) {
-                    case ALIEN_TYPES.REGULAR:
-                        ctx.fillStyle = '#ff6b6b';
-                        ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
-                        break;
-                    case ALIEN_TYPES.EXPLOSIVE:
-                        ctx.fillStyle = '#ffa502';
-                        ctx.beginPath();
-                        ctx.arc(alien.x + alien.width / 2, alien.y + alien.height / 2, alien.width / 2, 0, Math.PI * 2);
-                        ctx.fill();
-                        break;
-                    case ALIEN_TYPES.TOUGH:
-                        ctx.fillStyle = '#3742fa';
-                        ctx.beginPath();
-                        ctx.moveTo(alien.x + alien.width / 2, alien.y);
-                        ctx.lineTo(alien.x, alien.y + alien.height);
-                        ctx.lineTo(alien.x + alien.width, alien.y + alien.height);
-                        ctx.closePath();
-                        ctx.fill();
-                        break;
-                }
+                ctx.fillStyle = alien.type === ALIEN_TYPES.EXPLOSIVE ? '#ff4136' :
+                                alien.type === ALIEN_TYPES.TOUGH ? '#ffdc00' : '#7fdbff';
+                ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
             });
         }
 
@@ -306,12 +468,31 @@
 
         function drawExplosions() {
             explosions.forEach(explosion => {
+                ctx.fillStyle = `rgba(255, 165, 0, ${explosion.timer})`;
                 ctx.beginPath();
                 ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 165, 0, ${explosion.timer * 2})`;
                 ctx.fill();
-                explosion.radius = Math.min(explosion.maxRadius, explosion.radius + 1);
+                explosion.radius = (explosion.maxRadius - explosion.radius) * 0.1 + explosion.radius;
             });
+        }
+
+        function drawPowerUps() {
+            powerUps.forEach(powerUp => {
+                ctx.fillStyle = powerUp.type === POWERUP_TYPES.SHIELD ? '#30cfd0' :
+                                powerUp.type === POWERUP_TYPES.EXTRA_LIFE ? '#ff4136' : '#ffdc00';
+                ctx.beginPath();
+                ctx.arc(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, powerUp.width / 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawBoss() {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+
+            // Draw boss health bar
+            ctx.fillStyle = '#2ecc40';
+            ctx.fillRect(boss.x, boss.y - 10, (boss.width * boss.health) / 20, 5);
         }
 
         function updateInfoPanel() {
@@ -321,47 +502,68 @@
             document.getElementById('lives').textContent = `Lives: ${lives}`;
         }
 
-        function resetLevel() {
-            aliens.length = 0;
-            bullets.length = 0;
-            createAliens();
-            spaceship.x = canvas.width / 2;
-        }
-
         function levelUp() {
             level++;
+            alienDirection = 1;
             alienDropSpeed += 0.1;
             alienAdvanceDistance += 5;
-            resetLevel();
+            createAliens();
+        }
+
+        function resetLevel() {
+            spaceship.x = canvas.width / 2;
+            aliens = [];
+            bullets = [];
+            explosions = [];
+            powerUps = [];
+            boss = null;
+            createAliens();
         }
 
         function gameOver() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#fff';
-            ctx.font = '36px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
-            ctx.font = '24px Arial';
-            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
-            ctx.fillText(`Level Reached: ${level}`, canvas.width / 2, canvas.height / 2 + 70);
-
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem('highScore', highScore);
+                updateLeaderboard(score);
             }
 
-            setTimeout(() => {
-                score = 0;
-                level = 1;
-                lives = 3;
-                alienDropSpeed = 0.5;
-                alienAdvanceDistance = 20;
-                resetLevel();
-            }, 3000);
+            alert(`Game Over! Your score: ${score}`);
+            score = 0;
+            level = 1;
+            lives = 3;
+            alienDirection = 1;
+            alienDropSpeed = 0.5;
+            alienAdvanceDistance = 20;
+            resetLevel();
         }
 
-        window.onload = initGame;
+        function updateLeaderboard(newScore) {
+            let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+            leaderboard.push(newScore);
+            leaderboard.sort((a, b) => b - a);
+            leaderboard = leaderboard.slice(0, 10);
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+        }
+
+        function showLeaderboard() {
+            const leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+            const leaderboardList = document.getElementById('leaderboard-list');
+            leaderboardList.innerHTML = '';
+
+            leaderboard.forEach((score, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${score}`;
+                leaderboardList.appendChild(li);
+            });
+
+            document.getElementById('leaderboard').style.display = 'block';
+        }
+
+        function closeLeaderboard() {
+            document.getElementById('leaderboard').style.display = 'none';
+        }
+
+        initGame();
     </script>
 </body>
 </html>

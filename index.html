@@ -1,233 +1,225 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Invaders Clone</title>
+    <title>Space Invaders</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            height: 100vh;
-            background-color: #000;
-            touch-action: none;
-            font-family: Arial, sans-serif;
+        /* Simple styling for the game */
+        canvas {
+            border: 1px solid black;
         }
-        #gameCanvas {
-            border: 2px solid #fff;
-            margin-top: 10px;
-        }
-        #controls {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-        .control-btn {
-            width: 60px;
-            height: 60px;
-            background-color: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        #score {
             font-size: 24px;
-            color: #fff;
-            user-select: none;
+            font-weight: bold;
         }
-        #fireBtn {
-            background-color: rgba(0, 255, 0, 0.2);
+        #high-score {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        #lives {
+            font-size: 24px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <div id="controls">
-        <div id="leftBtn" class="control-btn">◀</div>
-        <div id="fireBtn" class="control-btn">🔥</div>
-        <div id="rightBtn" class="control-btn">▶</div>
-    </div>
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 300;
-        canvas.height = window.innerHeight - 100; // Adjust height to fit screen
+    <canvas id="game-canvas" width="400" height="600"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="high-score">High Score: 0</div>
+    <div id="lives">Lives: 9</div>
 
-        const player = {
-            x: canvas.width / 2 - 15,
-            y: canvas.height - 30,
+    <script>
+        // Get the canvas element
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set the canvas dimensions
+        canvas.width = 400;
+        canvas.height = 600;
+
+        // Define the game objects
+        const spaceship = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
             width: 30,
-            height: 20,
+            height: 30,
             speed: 5
         };
 
+        const aliens = [];
         const bullets = [];
-        const enemies = [];
-        const enemyRows = 3;
-        const enemyCols = 6;
-        let gameLoop;
         let score = 0;
-        let lives = 8;
-        let frameCount = 0;
+        let highScore = 0;
+        let lives = 9;
 
-        function drawPlayer() {
-            ctx.fillStyle = 'lime';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-        }
+        // Initialize the game
+        initGame();
 
-        function drawBullets() {
-            ctx.fillStyle = 'yellow';
-            bullets.forEach(bullet => {
-                ctx.fillRect(bullet.x, bullet.y, 3, 10);
-            });
-        }
+        function initGame() {
+            // Create a new alien every 500ms
+            setInterval(createAlien, 500);
 
-        function drawEnemies() {
-            ctx.fillStyle = 'red';
-            enemies.forEach(enemy => {
-                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-            });
-        }
-
-        function drawScore() {
-            ctx.fillStyle = 'white';
-            ctx.font = '16px Arial';
-            ctx.fillText(`Score: ${score}`, 10, 20);
-        }
-
-        function drawLives() {
-            ctx.fillStyle = 'white';
-            ctx.font = '16px Arial';
-            ctx.fillText(`Lives: ${lives}`, canvas.width - 70, 20);
-        }
-
-        function moveBullets() {
-            bullets.forEach(bullet => {
-                bullet.y -= 5;
-            });
-            bullets = bullets.filter(bullet => bullet.y > 0);
-        }
-
-        function moveEnemies() {
-            enemies.forEach(enemy => {
-                enemy.y += 0.2;
-            });
-        }
-
-        function checkCollisions() {
-            bullets.forEach((bullet, bIndex) => {
-                enemies.forEach((enemy, eIndex) => {
-                    if (bullet.x < enemy.x + enemy.width &&
-                        bullet.x + 3 > enemy.x &&
-                        bullet.y < enemy.y + enemy.height &&
-                        bullet.y + 10 > enemy.y) {
-                        enemies.splice(eIndex, 1);
-                        bullets.splice(bIndex, 1);
-                        score += 10;
-                    }
-                });
+            // Handle keyboard input
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') {
+                    spaceship.x -= spaceship.speed;
+                } else if (e.key === 'ArrowRight') {
+                    spaceship.x += spaceship.speed;
+                } else if (e.key === ' ') {
+                    shootBullet();
+                }
             });
 
-            enemies.forEach((enemy, index) => {
-                if (enemy.y + enemy.height >= player.y) {
-                    enemies.splice(index, 1);
+            // Update the game state
+            setInterval(updateGame, 1000 / 60);
+        }
+
+        function createAlien() {
+            const alien = {
+                x: Math.random() * (canvas.width - 30),
+                y: 0,
+                width: 30,
+                height: 30,
+                speed: 2
+            };
+            aliens.push(alien);
+        }
+
+        function shootBullet() {
+            const bullet = {
+                x: spaceship.x + spaceship.width / 2,
+                y: spaceship.y,
+                width: 5,
+                height: 10,
+                speed: 5
+            };
+            bullets.push(bullet);
+        }
+
+        function updateGame() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update the spaceship
+            if (spaceship.x + spaceship.width > canvas.width) {
+                spaceship.x = canvas.width - spaceship.width;
+            } else if (spaceship.x < 0) {
+                spaceship.x = 0;
+            }
+
+            // Update the aliens
+            aliens.forEach((alien) => {
+                alien.y += alien.speed;
+                if (alien.y > canvas.height) {
+                    alien.y = 0;
+                    alien.x = Math.random() * (canvas.width - 30);
+                }
+
+                // Check for collision with spaceship
+                if (checkCollision(alien, spaceship)) {
                     lives--;
                     if (lives <= 0) {
                         gameOver();
                     }
                 }
+
+                // Draw the alien
+                ctx.fillStyle = 'red';
+                ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
             });
+
+            // Update the bullets
+            bullets.forEach((bullet, index) => {
+                bullet.y -= bullet.speed;
+                if (bullet.y < 0) {
+                    bullets.splice(index, 1);
+                }
+
+                // Check for collision with aliens
+                aliens.forEach((alien, alienIndex) => {
+                    if (checkCollision(bullet, alien)) {
+                        aliens.splice(alienIndex, 1);
+                        bullets.splice(index, 1);
+                        score++;
+                        updateHighScore();
+                    }
+                });
+
+                // Draw the bullet
+                ctx.fillStyle = 'white';
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+
+            // Update the score
+            document.getElementById('score').textContent = `Score: ${score}`;
+
+            // Update the lives
+            document.getElementById('lives').textContent = `Lives: ${lives}`;
+
+            // Draw the spaceship
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(spaceship.x, spaceship.y, spaceship.width, spaceship.height);
+        }
+
+        function checkCollision(object1, object2) {
+            const dx = Math.abs(object1.x - object2.x);
+            const dy = Math.abs(object1.y - object2.y);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < object1.width / 2 + object2.width / 2) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function updateHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                document.getElementById('high-score').textContent = `High Score: ${highScore}`;
+                localStorage.setItem('highScore', highScore);
+            }
         }
 
         function gameOver() {
-            cancelAnimationFrame(gameLoop);
-            ctx.fillStyle = 'white';
-            ctx.font = '30px Arial';
-            ctx.fillText('Game Over', canvas.width / 2 - 70, canvas.height / 2);
+            // Show the game over screen
+            const gameOverText = document.createElement('div');
+            gameOverText.textContent = 'Game Over!';
+            gameOverText.style.position = 'absolute';
+            gameOverText.style.top = '50%';
+            gameOverText.style.left = '50%';
+            gameOverText.style.transform = 'translate(-50%, -50%)';
+            gameOverText.style.fontSize = '48px';
+            gameOverText.style.fontWeight = 'bold';
+            gameOverText.style.color = 'white';
+
+            const gameOverScreen = document.createElement('div');
+            gameOverScreen.style.position = 'fixed';
+            gameOverScreen.style.top = '0';
+            gameOverScreen.style.left = '0';
+            gameOverScreen.style.width = '100%';
+            gameOverScreen.style.height = '100%';
+            gameOverScreen.style.background = 'rgba(0, 0, 0, 0.5)';
+            gameOverScreen.appendChild(gameOverText);
+            document.body.appendChild(gameOverScreen);
+
+            // Remove the game over screen after 3 seconds
+            setTimeout(() => {
+                document.body.removeChild(gameOverScreen);
+            }, 3000);
+
+            // Reset the game
+            score = 0;
+            lives = 9;
+            aliens.length = 0;
+            bullets.length = 0;
+            initGame();
         }
 
-        function update() {
-            frameCount++;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawPlayer();
-            drawBullets();
-            drawEnemies();
-            drawScore();
-            drawLives();
-            moveBullets();
-            moveEnemies();
-            checkCollisions();
-
-            if (enemies.length === 0) {
-                initEnemies();
-            }
-
-            // Debug info
-            ctx.fillStyle = 'white';
-            ctx.font = '12px Arial';
-            ctx.fillText(`Frame: ${frameCount}`, 10, canvas.height - 10);
-
-            gameLoop = requestAnimationFrame(update);
+        // Get the stored high score
+        let storedHighScore = localStorage.getItem('highScore');
+        if (storedHighScore) {
+            highScore = storedHighScore;
         }
-
-        function initEnemies() {
-            for (let i = 0; i < enemyRows; i++) {
-                for (let j = 0; j < enemyCols; j++) {
-                    enemies.push({
-                        x: j * 40 + 30,
-                        y: i * 40 + 30,
-                        width: 30,
-                        height: 20
-                    });
-                }
-            }
-        }
-
-        function addTouchListeners() {
-            const leftBtn = document.getElementById('leftBtn');
-            const rightBtn = document.getElementById('rightBtn');
-            const fireBtn = document.getElementById('fireBtn');
-
-            leftBtn.addEventListener('touchstart', () => movePlayer(-1));
-            leftBtn.addEventListener('touchend', stopPlayer);
-            rightBtn.addEventListener('touchstart', () => movePlayer(1));
-            rightBtn.addEventListener('touchend', stopPlayer);
-            fireBtn.addEventListener('touchstart', fireBullet);
-        }
-
-        let movementInterval;
-
-        function movePlayer(direction) {
-            clearInterval(movementInterval);
-            movementInterval = setInterval(() => {
-                player.x += direction * player.speed;
-                player.x = Math.max(0, Math.min(player.x, canvas.width - player.width));
-            }, 16);
-        }
-
-        function stopPlayer() {
-            clearInterval(movementInterval);
-        }
-
-        function fireBullet() {
-            bullets.push({
-                x: player.x + player.width / 2 - 1.5,
-                y: player.y
-            });
-        }
-
-        initEnemies();
-        addTouchListeners();
-        update(); // Start the game loop
-
-        // Debug: Log to console to ensure script is running
-        console.log("Game initialized");
     </script>
 </body>
 </html>

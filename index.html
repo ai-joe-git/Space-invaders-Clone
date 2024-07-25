@@ -41,6 +41,7 @@
         <canvas id="game-canvas" width="400" height="600"></canvas>
         <div id="info-panel">
             <div id="score" class="info">Score: 0</div>
+            <div id="level" class="info">Level: 1</div>
             <div id="high-score" class="info">High Score: 0</div>
             <div id="lives" class="info">Lives: 3</div>
         </div>
@@ -63,24 +64,25 @@
         const bullets = [];
         const explosions = [];
         let score = 0;
+        let level = 1;
         let highScore = localStorage.getItem('highScore') || 0;
         let lives = 3;
         let lastTime = 0;
         let alienDirection = 1;
         let alienDropSpeed = 0.5;
-        let alienAdvanceDistance = 20; // Distance aliens move down after each side-to-side movement
+        let alienAdvanceDistance = 20;
+
+        const ALIEN_TYPES = {
+            REGULAR: 'regular',
+            EXPLOSIVE: 'explosive',
+            TOUGH: 'tough'
+        };
 
         function initGame() {
-            try {
-                console.log("Initializing game...");
-                document.addEventListener('keydown', handleKeyPress);
-                document.addEventListener('keyup', handleKeyRelease);
-                createAliens();
-                requestAnimationFrame(gameLoop);
-                console.log("Game initialized successfully");
-            } catch (error) {
-                console.error("Error initializing game:", error);
-            }
+            document.addEventListener('keydown', handleKeyPress);
+            document.addEventListener('keyup', handleKeyRelease);
+            createAliens();
+            requestAnimationFrame(gameLoop);
         }
 
         function handleKeyPress(e) {
@@ -96,15 +98,25 @@
         function createAliens() {
             for (let i = 0; i < 5; i++) {
                 for (let j = 0; j < 8; j++) {
+                    const type = getRandomAlienType();
                     aliens.push({
                         x: 50 + j * 40,
                         y: 50 + i * 40,
                         width: 30,
                         height: 30,
-                        speed: 0.5,
+                        speed: 0.5 + (level - 1) * 0.1,
+                        type: type,
+                        health: type === ALIEN_TYPES.TOUGH ? 3 : 1
                     });
                 }
             }
+        }
+
+        function getRandomAlienType() {
+            const rand = Math.random();
+            if (rand < 0.7) return ALIEN_TYPES.REGULAR;
+            if (rand < 0.85) return ALIEN_TYPES.EXPLOSIVE;
+            return ALIEN_TYPES.TOUGH;
         }
 
         function shootBullet() {
@@ -120,29 +132,25 @@
         }
 
         function gameLoop(currentTime) {
-            try {
-                const deltaTime = (currentTime - lastTime) / 1000;
-                lastTime = currentTime;
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
 
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                updateSpaceship(deltaTime);
-                updateAliens(deltaTime);
-                updateBullets(deltaTime);
-                updateExplosions(deltaTime);
-                checkCollisions();
+            updateSpaceship(deltaTime);
+            updateAliens(deltaTime);
+            updateBullets(deltaTime);
+            updateExplosions(deltaTime);
+            checkCollisions();
 
-                drawSpaceship();
-                drawAliens();
-                drawBullets();
-                drawExplosions();
+            drawSpaceship();
+            drawAliens();
+            drawBullets();
+            drawExplosions();
 
-                updateInfoPanel();
+            updateInfoPanel();
 
-                requestAnimationFrame(gameLoop);
-            } catch (error) {
-                console.error("Error in game loop:", error);
-            }
+            requestAnimationFrame(gameLoop);
         }
 
         function updateSpaceship(deltaTime) {
@@ -194,9 +202,19 @@
                 aliens.forEach((alien, alienIndex) => {
                     if (checkCollision(bullet, alien)) {
                         bullets.splice(bulletIndex, 1);
-                        aliens.splice(alienIndex, 1);
-                        createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
-                        score += 10;
+                        alien.health--;
+
+                        if (alien.health <= 0) {
+                            if (alien.type === ALIEN_TYPES.EXPLOSIVE) {
+                                createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2, true);
+                                destroyAdjacentAliens(alien);
+                            } else {
+                                createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
+                            }
+                            aliens.splice(alienIndex, 1);
+                            score += alien.type === ALIEN_TYPES.TOUGH ? 30 : 10;
+                        }
+
                         if (aliens.length === 0) levelUp();
                     }
                 });
@@ -212,6 +230,20 @@
             });
         }
 
+        function destroyAdjacentAliens(centerAlien) {
+            const adjacentRange = 40;
+            aliens.forEach((alien, index) => {
+                const distance = Math.sqrt(
+                    Math.pow(centerAlien.x - alien.x, 2) + Math.pow(centerAlien.y - alien.y, 2)
+                );
+                if (distance <= adjacentRange && alien !== centerAlien) {
+                    createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
+                    aliens.splice(index, 1);
+                    score += 10;
+                }
+            });
+        }
+
         function checkCollision(obj1, obj2) {
             return obj1.x < obj2.x + obj2.width &&
                    obj1.x + obj1.width > obj2.x &&
@@ -219,13 +251,13 @@
                    obj1.y + obj1.height > obj2.y;
         }
 
-        function createExplosion(x, y) {
+        function createExplosion(x, y, isLarge = false) {
             explosions.push({
                 x: x,
                 y: y,
                 radius: 1,
-                maxRadius: 20,
-                timer: 0.5
+                maxRadius: isLarge ? 40 : 20,
+                timer: isLarge ? 1 : 0.5
             });
         }
 
@@ -241,8 +273,27 @@
 
         function drawAliens() {
             aliens.forEach(alien => {
-                ctx.fillStyle = '#ff6b6b';
-                ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
+                switch (alien.type) {
+                    case ALIEN_TYPES.REGULAR:
+                        ctx.fillStyle = '#ff6b6b';
+                        ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
+                        break;
+                    case ALIEN_TYPES.EXPLOSIVE:
+                        ctx.fillStyle = '#ffa502';
+                        ctx.beginPath();
+                        ctx.arc(alien.x + alien.width / 2, alien.y + alien.height / 2, alien.width / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    case ALIEN_TYPES.TOUGH:
+                        ctx.fillStyle = '#3742fa';
+                        ctx.beginPath();
+                        ctx.moveTo(alien.x + alien.width / 2, alien.y);
+                        ctx.lineTo(alien.x, alien.y + alien.height);
+                        ctx.lineTo(alien.x + alien.width, alien.y + alien.height);
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                }
             });
         }
 
@@ -265,6 +316,7 @@
 
         function updateInfoPanel() {
             document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('level').textContent = `Level: ${level}`;
             document.getElementById('high-score').textContent = `High Score: ${highScore}`;
             document.getElementById('lives').textContent = `Lives: ${lives}`;
         }
@@ -277,10 +329,10 @@
         }
 
         function levelUp() {
+            level++;
             alienDropSpeed += 0.1;
-            alienAdvanceDistance += 5; // Increase the advance distance for added difficulty
-            aliens.forEach(alien => alien.speed += 0.1);
-            createAliens();
+            alienAdvanceDistance += 5;
+            resetLevel();
         }
 
         function gameOver() {
@@ -292,6 +344,7 @@
             ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
             ctx.font = '24px Arial';
             ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
+            ctx.fillText(`Level Reached: ${level}`, canvas.width / 2, canvas.height / 2 + 70);
 
             if (score > highScore) {
                 highScore = score;
@@ -300,9 +353,10 @@
 
             setTimeout(() => {
                 score = 0;
+                level = 1;
                 lives = 3;
                 alienDropSpeed = 0.5;
-                alienAdvanceDistance = 20; // Reset the advance distance
+                alienAdvanceDistance = 20;
                 resetLevel();
             }, 3000);
         }

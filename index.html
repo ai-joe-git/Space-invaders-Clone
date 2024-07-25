@@ -13,41 +13,44 @@
             align-items: center;
             min-height: 100vh;
             background: #000 url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==') repeat;
-            font-family: Arial, sans-serif;
+            font-family: 'Press Start 2P', cursive;
             overflow: hidden;
         }
         #game-container {
             position: relative;
         }
         canvas {
-            border: 2px solid #30cfd0;
-            box-shadow: 0 0 10px #30cfd0;
+            border: 4px solid #30cfd0;
+            border-radius: 10px;
+            box-shadow: 0 0 20px #30cfd0, inset 0 0 20px #30cfd0;
         }
         #info-panel {
             display: flex;
             justify-content: space-between;
             margin-top: 10px;
             color: #fff;
+            text-shadow: 0 0 5px #30cfd0;
         }
         .info {
-            font-size: 18px;
-            font-weight: bold;
-            text-shadow: 0 0 5px #30cfd0;
+            font-size: 14px;
         }
         #leaderboard {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.9);
             border: 2px solid #30cfd0;
+            border-radius: 10px;
             padding: 20px;
             color: #fff;
             display: none;
+            box-shadow: 0 0 10px #30cfd0;
         }
         #leaderboard h2 {
             text-align: center;
             margin-top: 0;
+            color: #30cfd0;
         }
         #leaderboard-list {
             list-style-type: none;
@@ -55,6 +58,9 @@
         }
         #leaderboard-list li {
             margin-bottom: 5px;
+            padding: 5px;
+            background-color: rgba(48, 207, 208, 0.1);
+            border-radius: 5px;
         }
         #close-leaderboard {
             display: block;
@@ -64,8 +70,14 @@
             border: none;
             color: #000;
             cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            border-radius: 5px;
+        }
+        #close-leaderboard:hover {
+            background-color: #28b5b9;
         }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="game-container">
@@ -86,6 +98,43 @@
     <script>
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
+
+        // Audio context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Sound effects
+        const sounds = {
+            shoot: null,
+            explosion: null,
+            powerUp: null,
+            bossDeath: null
+        };
+
+        // Load sound effects
+        function loadSound(url) {
+            return fetch(url)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer));
+        }
+
+        Promise.all([
+            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f3+AgICA'),
+            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/gICA'),
+            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB+fn5/f39/'),
+            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAACAgICAf39/')
+        ]).then(loadedSounds => {
+            sounds.shoot = loadedSounds[0];
+            sounds.explosion = loadedSounds[1];
+            sounds.powerUp = loadedSounds[2];
+            sounds.bossDeath = loadedSounds[3];
+        });
+
+        function playSound(buffer) {
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start();
+        }
 
         const spaceship = {
             x: canvas.width / 2,
@@ -176,6 +225,7 @@
                     height: 15,
                     speed: 7
                 });
+                playSound(sounds.shoot);
             }
         }
 
@@ -193,6 +243,7 @@
             if (boss) updateBoss(deltaTime);
             checkCollisions();
 
+            drawBackground();
             drawSpaceship();
             drawAliens();
             drawBullets();
@@ -203,6 +254,25 @@
             updateInfoPanel();
 
             requestAnimationFrame(gameLoop);
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw stars
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < 50; i++) {
+                ctx.beginPath();
+                ctx.arc(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    Math.random() * 2,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
         }
 
         function updateSpaceship(deltaTime) {
@@ -298,6 +368,7 @@
                             }
                             aliens.splice(alienIndex, 1);
                             score += alien.type === ALIEN_TYPES.TOUGH ? 30 : 10;
+                            playSound(sounds.explosion);
                         }
 
                         if (aliens.length === 0) {
@@ -318,6 +389,9 @@
                         boss = null;
                         score += 100;
                         levelUp();
+                        playSound(sounds.bossDeath);
+                    } else {
+                        playSound(sounds.explosion);
                     }
                 }
             });
@@ -327,6 +401,7 @@
                     if (!spaceship.shieldActive) {
                         lives--;
                         createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
+                        playSound(sounds.explosion);
                         if (lives <= 0) gameOver();
                         else resetLevel();
                     }
@@ -337,38 +412,39 @@
                 if (checkCollision(powerUp, spaceship)) {
                     applyPowerUp(powerUp.type);
                     powerUps.splice(index, 1);
+                    playSound(sounds.powerUp);
                 }
             });
         }
 
-        function destroyAdjacentAliens(centerAlien) {
-            const adjacentRange = 40;
-            aliens.forEach((alien, index) => {
-                const distance = Math.sqrt(
-                    Math.pow(centerAlien.x - alien.x, 2) + Math.pow(centerAlien.y - alien.y, 2)
-                );
-                if (distance <= adjacentRange && alien !== centerAlien) {
-                    createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
-                    aliens.splice(index, 1);
-                    score += 10;
-                }
-            });
-        }
-
-        function checkCollision(obj1, obj2) {
-            return obj1.x < obj2.x + obj2.width &&
-                   obj1.x + obj1.width > obj2.x &&
-                   obj1.y < obj2.y + obj2.height &&
-                   obj1.y + obj1.height > obj2.y;
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
         }
 
         function createExplosion(x, y, isLarge = false) {
             explosions.push({
                 x: x,
                 y: y,
-                radius: 1,
-                maxRadius: isLarge ? 40 : 20,
-                timer: isLarge ? 1 : 0.5
+                radius: 0,
+                maxRadius: isLarge ? 50 : 20,
+                timer: 0.5
+            });
+        }
+
+        function destroyAdjacentAliens(centerAlien) {
+            const range = 50;
+            aliens.forEach((alien, index) => {
+                const dx = alien.x - centerAlien.x;
+                const dy = alien.y - centerAlien.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < range) {
+                    createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
+                    aliens.splice(index, 1);
+                    score += 10;
+                }
             });
         }
 
@@ -402,9 +478,9 @@
 
         function spawnBoss() {
             boss = {
-                x: canvas.width / 2 - 75,
+                x: canvas.width / 2 - 100,
                 y: 50,
-                width: 150,
+                width: 200,
                 height: 100,
                 speed: 2,
                 health: 20,
@@ -413,27 +489,18 @@
         }
 
         function bossShooting() {
-            const bulletSpeed = 5;
-            const bulletDirections = [
-                { dx: 0, dy: 1 },
-                { dx: -0.5, dy: 0.866 },
-                { dx: 0.5, dy: 0.866 }
-            ];
-
-            bulletDirections.forEach(dir => {
+            for (let i = 0; i < 3; i++) {
                 bullets.push({
-                    x: boss.x + boss.width / 2,
+                    x: boss.x + boss.width / 2 + (i - 1) * 30,
                     y: boss.y + boss.height,
-                    width: 6,
-                    height: 6,
-                    speed: bulletSpeed,
-                    dx: dir.dx,
-                    dy: dir.dy
+                    width: 4,
+                    height: 15,
+                    speed: -5
                 });
-            });
+            }
         }
 
-function drawSpaceship() {
+        function drawSpaceship() {
             ctx.fillStyle = '#30cfd0';
             ctx.beginPath();
             ctx.moveTo(spaceship.x + spaceship.width / 2, spaceship.y);
@@ -456,6 +523,12 @@ function drawSpaceship() {
                 ctx.fillStyle = alien.type === ALIEN_TYPES.EXPLOSIVE ? '#ff4136' :
                                 alien.type === ALIEN_TYPES.TOUGH ? '#ffdc00' : '#7fdbff';
                 ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
+
+                // Draw alien details
+                ctx.fillStyle = '#000';
+                ctx.fillRect(alien.x + 5, alien.y + 10, 5, 5);
+                ctx.fillRect(alien.x + 20, alien.y + 10, 5, 5);
+                ctx.fillRect(alien.x + 5, alien.y + 20, 20, 3);
             });
         }
 
@@ -468,7 +541,12 @@ function drawSpaceship() {
 
         function drawExplosions() {
             explosions.forEach(explosion => {
-                ctx.fillStyle = `rgba(255, 165, 0, ${explosion.timer})`;
+                const gradient = ctx.createRadialGradient(explosion.x, explosion.y, 0, explosion.x, explosion.y, explosion.radius);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                gradient.addColorStop(0.8, 'rgba(255, 165, 0, 1)');
+                gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+
+                ctx.fillStyle = gradient;
                 ctx.beginPath();
                 ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -483,12 +561,27 @@ function drawSpaceship() {
                 ctx.beginPath();
                 ctx.arc(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, powerUp.width / 2, 0, Math.PI * 2);
                 ctx.fill();
+
+                // Draw power-up symbol
+                ctx.fillStyle = '#000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(powerUp.type === POWERUP_TYPES.SHIELD ? 'S' :
+                             powerUp.type === POWERUP_TYPES.EXTRA_LIFE ? '+' : 'R',
+                             powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2);
             });
         }
 
         function drawBoss() {
             ctx.fillStyle = '#ff6b6b';
             ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+
+            // Draw boss details
+            ctx.fillStyle = '#000';
+            ctx.fillRect(boss.x + 30, boss.y + 20, 30, 20);
+            ctx.fillRect(boss.x + 140, boss.y + 20, 30, 20);
+            ctx.fillRect(boss.x + 60, boss.y + 70, 80, 10);
 
             // Draw boss health bar
             ctx.fillStyle = '#2ecc40';

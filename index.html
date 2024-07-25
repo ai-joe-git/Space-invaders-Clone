@@ -68,6 +68,7 @@
         let lastTime = 0;
         let alienDirection = 1;
         let alienDropSpeed = 0.5;
+        let alienAdvanceDistance = 20; // Distance aliens move down after each side-to-side movement
 
         function initGame() {
             try {
@@ -151,17 +152,23 @@
 
         function updateAliens(deltaTime) {
             let changeDirection = false;
+            let leftmostAlien = canvas.width;
+            let rightmostAlien = 0;
+
             aliens.forEach(alien => {
                 alien.x += alien.speed * alienDirection * deltaTime * 60;
-                if (alien.x <= 0 || alien.x + alien.width >= canvas.width) {
-                    changeDirection = true;
-                }
+                leftmostAlien = Math.min(leftmostAlien, alien.x);
+                rightmostAlien = Math.max(rightmostAlien, alien.x + alien.width);
             });
+
+            if (leftmostAlien <= 0 || rightmostAlien >= canvas.width) {
+                changeDirection = true;
+            }
 
             if (changeDirection) {
                 alienDirection *= -1;
                 aliens.forEach(alien => {
-                    alien.y += alienDropSpeed * deltaTime * 60;
+                    alien.y += alienAdvanceDistance;
                 });
             }
         }
@@ -271,6 +278,7 @@
 
         function levelUp() {
             alienDropSpeed += 0.1;
+            alienAdvanceDistance += 5; // Increase the advance distance for added difficulty
             aliens.forEach(alien => alien.speed += 0.1);
             createAliens();
         }
@@ -294,6 +302,7 @@
                 score = 0;
                 lives = 3;
                 alienDropSpeed = 0.5;
+                alienAdvanceDistance = 20; // Reset the advance distance
                 resetLevel();
             }, 3000);
         }

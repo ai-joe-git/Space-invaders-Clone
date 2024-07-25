@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Invaders</title>
+    <title>Space Invaders Deluxe</title>
     <style>
         body {
             margin: 0;
@@ -14,6 +14,7 @@
             min-height: 100vh;
             background: #000 url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==') repeat;
             font-family: Arial, sans-serif;
+            overflow: hidden;
         }
         #game-container {
             position: relative;
@@ -54,21 +55,26 @@
             y: canvas.height - 50,
             width: 40,
             height: 40,
-            speed: 5
+            speed: 5,
+            speedX: 0
         };
 
         const aliens = [];
         const bullets = [];
+        const explosions = [];
         let score = 0;
         let highScore = localStorage.getItem('highScore') || 0;
         let lives = 3;
         let gameLoop;
+        let lastTime = 0;
+        let alienDirection = 1;
+        let alienDropSpeed = 0.5;
 
         function initGame() {
             document.addEventListener('keydown', handleKeyPress);
             document.addEventListener('keyup', handleKeyRelease);
             createAliens();
-            gameLoop = setInterval(updateGame, 1000 / 60);
+            requestAnimationFrame(gameLoop);
         }
 
         function handleKeyPress(e) {
@@ -89,64 +95,81 @@
                         y: 50 + i * 40,
                         width: 30,
                         height: 30,
-                        speed: 1,
-                        direction: 1
+                        speed: 0.5,
                     });
                 }
             }
         }
 
         function shootBullet() {
-            bullets.push({
-                x: spaceship.x + spaceship.width / 2,
-                y: spaceship.y,
-                width: 4,
-                height: 15,
-                speed: 7
-            });
+            if (bullets.length < 3) {
+                bullets.push({
+                    x: spaceship.x + spaceship.width / 2 - 2,
+                    y: spaceship.y,
+                    width: 4,
+                    height: 15,
+                    speed: 7
+                });
+            }
         }
 
-        function updateGame() {
+        function gameLoop(currentTime) {
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            updateSpaceship();
-            updateAliens();
-            updateBullets();
+            updateSpaceship(deltaTime);
+            updateAliens(deltaTime);
+            updateBullets(deltaTime);
+            updateExplosions(deltaTime);
             checkCollisions();
 
             drawSpaceship();
             drawAliens();
             drawBullets();
+            drawExplosions();
 
             updateInfoPanel();
+
+            requestAnimationFrame(gameLoop);
         }
 
-        function updateSpaceship() {
-            spaceship.x += spaceship.speedX || 0;
+        function updateSpaceship(deltaTime) {
+            spaceship.x += spaceship.speedX * deltaTime * 60;
             spaceship.x = Math.max(0, Math.min(canvas.width - spaceship.width, spaceship.x));
         }
 
-        function updateAliens() {
+        function updateAliens(deltaTime) {
             let changeDirection = false;
             aliens.forEach(alien => {
-                alien.x += alien.speed * alien.direction;
+                alien.x += alien.speed * alienDirection * deltaTime * 60;
                 if (alien.x <= 0 || alien.x + alien.width >= canvas.width) {
                     changeDirection = true;
                 }
             });
 
             if (changeDirection) {
+                alienDirection *= -1;
                 aliens.forEach(alien => {
-                    alien.direction *= -1;
-                    alien.y += 20;
+                    alien.y += alienDropSpeed * deltaTime * 60;
                 });
             }
         }
 
-        function updateBullets() {
+        function updateBullets(deltaTime) {
             bullets.forEach((bullet, index) => {
-                bullet.y -= bullet.speed;
+                bullet.y -= bullet.speed * deltaTime * 60;
                 if (bullet.y < 0) bullets.splice(index, 1);
+            });
+        }
+
+        function updateExplosions(deltaTime) {
+            explosions.forEach((explosion, index) => {
+                explosion.timer -= deltaTime;
+                if (explosion.timer <= 0) {
+                    explosions.splice(index, 1);
+                }
             });
         }
 
@@ -156,7 +179,9 @@
                     if (checkCollision(bullet, alien)) {
                         bullets.splice(bulletIndex, 1);
                         aliens.splice(alienIndex, 1);
+                        createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
                         score += 10;
+                        if (aliens.length === 0) levelUp();
                     }
                 });
             });
@@ -164,6 +189,7 @@
             aliens.forEach(alien => {
                 if (checkCollision(alien, spaceship) || alien.y + alien.height >= canvas.height) {
                     lives--;
+                    createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
                     if (lives <= 0) gameOver();
                     else resetLevel();
                 }
@@ -175,6 +201,16 @@
                    obj1.x + obj1.width > obj2.x &&
                    obj1.y < obj2.y + obj2.height &&
                    obj1.y + obj1.height > obj2.y;
+        }
+
+        function createExplosion(x, y) {
+            explosions.push({
+                x: x,
+                y: y,
+                radius: 1,
+                maxRadius: 20,
+                timer: 0.5
+            });
         }
 
         function drawSpaceship() {
@@ -201,6 +237,16 @@
             });
         }
 
+        function drawExplosions() {
+            explosions.forEach(explosion => {
+                ctx.beginPath();
+                ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 165, 0, ${explosion.timer * 2})`;
+                ctx.fill();
+                explosion.radius = Math.min(explosion.maxRadius, explosion.radius + 1);
+            });
+        }
+
         function updateInfoPanel() {
             document.getElementById('score').textContent = `Score: ${score}`;
             document.getElementById('high-score').textContent = `High Score: ${highScore}`;
@@ -214,8 +260,13 @@
             spaceship.x = canvas.width / 2;
         }
 
+        function levelUp() {
+            alienDropSpeed += 0.1;
+            aliens.forEach(alien => alien.speed += 0.1);
+            createAliens();
+        }
+
         function gameOver() {
-            clearInterval(gameLoop);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#fff';
@@ -233,8 +284,8 @@
             setTimeout(() => {
                 score = 0;
                 lives = 3;
+                alienDropSpeed = 0.5;
                 resetLevel();
-                gameLoop = setInterval(updateGame, 1000 / 60);
             }, 3000);
         }
 

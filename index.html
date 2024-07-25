@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Invaders Deluxe</title>
+    <title>Enhanced Space Invaders</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
@@ -12,45 +13,37 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: #000 url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==') repeat;
+            background-color: #000;
             font-family: 'Press Start 2P', cursive;
-            overflow: hidden;
+            color: #fff;
         }
         #game-container {
-            position: relative;
+            text-align: center;
         }
         canvas {
-            border: 4px solid #30cfd0;
-            border-radius: 10px;
-            box-shadow: 0 0 20px #30cfd0, inset 0 0 20px #30cfd0;
+            border: 2px solid #30cfd0;
         }
         #info-panel {
             display: flex;
             justify-content: space-between;
             margin-top: 10px;
-            color: #fff;
-            text-shadow: 0 0 5px #30cfd0;
         }
-        .info {
-            font-size: 14px;
+        #info-panel div {
+            flex: 1;
         }
         #leaderboard {
-            position: absolute;
+            display: none;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             background-color: rgba(0, 0, 0, 0.9);
-            border: 2px solid #30cfd0;
-            border-radius: 10px;
             padding: 20px;
-            color: #fff;
-            display: none;
-            box-shadow: 0 0 10px #30cfd0;
+            border: 2px solid #30cfd0;
+            z-index: 100;
         }
         #leaderboard h2 {
-            text-align: center;
             margin-top: 0;
-            color: #30cfd0;
         }
         #leaderboard-list {
             list-style-type: none;
@@ -58,113 +51,40 @@
         }
         #leaderboard-list li {
             margin-bottom: 5px;
-            padding: 5px;
-            background-color: rgba(48, 207, 208, 0.1);
-            border-radius: 5px;
         }
         #close-leaderboard {
-            display: block;
-            margin: 10px auto 0;
+            margin-top: 10px;
             padding: 5px 10px;
             background-color: #30cfd0;
-            border: none;
             color: #000;
+            border: none;
             cursor: pointer;
-            font-family: 'Press Start 2P', cursive;
-            border-radius: 5px;
-        }
-        #close-leaderboard:hover {
-            background-color: #28b5b9;
         }
     </style>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="game-container">
-        <canvas id="game-canvas" width="400" height="600"></canvas>
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
         <div id="info-panel">
-            <div id="score" class="info">Score: 0</div>
-            <div id="level" class="info">Level: 1</div>
-            <div id="high-score" class="info">High Score: 0</div>
-            <div id="lives" class="info">Lives: 3</div>
-        </div>
-        <div id="leaderboard">
-            <h2>High Scores</h2>
-            <ol id="leaderboard-list"></ol>
-            <button id="close-leaderboard">Close</button>
+            <div id="score">Score: 0</div>
+            <div id="level">Level: 1</div>
+            <div id="high-score">High Score: 0</div>
+            <div id="lives">Lives: 3</div>
         </div>
     </div>
-
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <ul id="leaderboard-list"></ul>
+        <button id="close-leaderboard" onclick="closeLeaderboard()">Close</button>
+    </div>
     <script>
-        const canvas = document.getElementById('game-canvas');
+        const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Audio context
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-        // Sound effects
-        const sounds = {
-            shoot: null,
-            explosion: null,
-            powerUp: null,
-            bossDeath: null
-        };
-
-        // Load sound effects
-        function loadSound(url) {
-            return fetch(url)
-                .then(response => response.arrayBuffer())
-                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer));
-        }
-
-        Promise.all([
-            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f3+AgICA'),
-            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/gICA'),
-            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB+fn5/f39/'),
-            loadSound('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAACAgICAf39/')
-        ]).then(loadedSounds => {
-            sounds.shoot = loadedSounds[0];
-            sounds.explosion = loadedSounds[1];
-            sounds.powerUp = loadedSounds[2];
-            sounds.bossDeath = loadedSounds[3];
-        });
-
-        function playSound(buffer) {
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioContext.destination);
-            source.start();
-        }
-
-        const spaceship = {
-            x: canvas.width / 2,
-            y: canvas.height - 50,
-            width: 40,
-            height: 40,
-            speed: 5,
-            speedX: 0,
-            shieldActive: false,
-            shieldTimer: 0
-        };
-
-        const aliens = [];
-        const bullets = [];
-        const explosions = [];
-        const powerUps = [];
-        let boss = null;
-        let score = 0;
-        let level = 1;
-        let highScore = localStorage.getItem('highScore') || 0;
-        let lives = 3;
-        let lastTime = 0;
-        let alienDirection = 1;
-        let alienDropSpeed = 0.5;
-        let alienAdvanceDistance = 20;
-
         const ALIEN_TYPES = {
-            REGULAR: 'regular',
-            EXPLOSIVE: 'explosive',
-            TOUGH: 'tough'
+            NORMAL: 'normal',
+            TOUGH: 'tough',
+            EXPLOSIVE: 'explosive'
         };
 
         const POWERUP_TYPES = {
@@ -173,77 +93,132 @@
             RAPID_FIRE: 'rapid_fire'
         };
 
+        let spaceship = {
+            x: canvas.width / 2,
+            y: canvas.height - 30,
+            width: 30,
+            height: 30,
+            speed: 5,
+            shieldActive: false,
+            shieldTimer: 0,
+            rapidFireActive: false,
+            rapidFireTimer: 0
+        };
+
+        let aliens = [];
+        let bullets = [];
+        let explosions = [];
+        let powerUps = [];
+        let boss = null;
+
+        let score = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let level = 1;
+        let lives = 3;
+
+        let alienDirection = 1;
+        let alienDropSpeed = 0.5;
+        let alienAdvanceDistance = 20;
+
+        let lastTime = 0;
+        let deltaTime = 0;
+
+        const sounds = {
+            shoot: new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/f39/'),
+            explosion: new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/f39/'),
+            powerUp: new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/f39/'),
+            bossDeath: new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAB/f39/f39/')
+        };
+
+        function playSound(sound) {
+            sound.currentTime = 0;
+            sound.play();
+        }
+
         function initGame() {
-            document.addEventListener('keydown', handleKeyPress);
-            document.addEventListener('keyup', handleKeyRelease);
-            document.getElementById('close-leaderboard').addEventListener('click', closeLeaderboard);
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
             createAliens();
-            requestAnimationFrame(gameLoop);
-        }
-
-        function handleKeyPress(e) {
-            if (e.key === 'ArrowLeft') spaceship.speedX = -spaceship.speed;
-            if (e.key === 'ArrowRight') spaceship.speedX = spaceship.speed;
-            if (e.key === ' ') shootBullet();
-            if (e.key === 'l') showLeaderboard();
-        }
-
-        function handleKeyRelease(e) {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') spaceship.speedX = 0;
+            gameLoop();
         }
 
         function createAliens() {
+            aliens = [];
             for (let i = 0; i < 5; i++) {
-                for (let j = 0; j < 8; j++) {
-                    const type = getRandomAlienType();
+                for (let j = 0; j < 10; j++) {
+                    let type = ALIEN_TYPES.NORMAL;
+                    if (Math.random() < 0.1) {
+                        type = ALIEN_TYPES.TOUGH;
+                    } else if (Math.random() < 0.05) {
+                        type = ALIEN_TYPES.EXPLOSIVE;
+                    }
                     aliens.push({
-                        x: 50 + j * 40,
-                        y: 50 + i * 40,
+                        x: j * 40 + 50,
+                        y: i * 30 + 30,
                         width: 30,
-                        height: 30,
-                        speed: 0.5 + (level - 1) * 0.1,
+                        height: 20,
                         type: type,
-                        health: type === ALIEN_TYPES.TOUGH ? 3 : 1
+                        health: type === ALIEN_TYPES.TOUGH ? 2 : 1
                     });
                 }
             }
         }
 
-        function getRandomAlienType() {
-            const rand = Math.random();
-            if (rand < 0.7) return ALIEN_TYPES.REGULAR;
-            if (rand < 0.85) return ALIEN_TYPES.EXPLOSIVE;
-            return ALIEN_TYPES.TOUGH;
+        function handleKeyDown(e) {
+            if (e.key === 'ArrowLeft') {
+                spaceship.x -= spaceship.speed;
+            } else if (e.key === 'ArrowRight') {
+                spaceship.x += spaceship.speed;
+            } else if (e.key === ' ') {
+                shoot();
+            }
+
+            spaceship.x = Math.max(0, Math.min(canvas.width - spaceship.width, spaceship.x));
         }
 
-        function shootBullet() {
-            if (bullets.length < 3) {
-                bullets.push({
-                    x: spaceship.x + spaceship.width / 2 - 2,
-                    y: spaceship.y,
-                    width: 4,
-                    height: 15,
-                    speed: 7
-                });
-                playSound(sounds.shoot);
+        function handleKeyUp(e) {
+            if (e.key === 'p') {
+                showLeaderboard();
             }
         }
 
+        function shoot() {
+            if (spaceship.rapidFireActive) {
+                for (let i = -1; i <= 1; i++) {
+                    bullets.push({
+                        x: spaceship.x + spaceship.width / 2 + i * 10,
+                        y: spaceship.y,
+                        width: 2,
+                        height: 10,
+                        speed: 7
+                    });
+                }
+            } else {
+                bullets.push({
+                    x: spaceship.x + spaceship.width / 2,
+                    y: spaceship.y,
+                    width: 2,
+                    height: 10,
+                    speed: 7
+                });
+            }
+            playSound(sounds.shoot);
+        }
+
         function gameLoop(currentTime) {
-            const deltaTime = (currentTime - lastTime) / 1000;
+            deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStarryBackground();
 
-            updateSpaceship(deltaTime);
-            updateAliens(deltaTime);
-            updateBullets(deltaTime);
-            updateExplosions(deltaTime);
-            updatePowerUps(deltaTime);
-            if (boss) updateBoss(deltaTime);
-            checkCollisions();
+            updateSpaceship();
+            updateAliens();
+            updateBullets();
+            updateExplosions();
+            updatePowerUps();
+            if (boss) updateBoss();
 
-            drawBackground();
             drawSpaceship();
             drawAliens();
             drawBullets();
@@ -256,18 +231,17 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function drawBackground() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        function drawStarryBackground() {
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw stars
-            ctx.fillStyle = 'white';
-            for (let i = 0; i < 50; i++) {
+
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 100; i++) {
                 ctx.beginPath();
                 ctx.arc(
                     Math.random() * canvas.width,
                     Math.random() * canvas.height,
-                    Math.random() * 2,
+                    Math.random() * 1.5,
                     0,
                     Math.PI * 2
                 );
@@ -275,38 +249,55 @@
             }
         }
 
-        function updateSpaceship(deltaTime) {
-            spaceship.x += spaceship.speedX * deltaTime * 60;
-            spaceship.x = Math.max(0, Math.min(canvas.width - spaceship.width, spaceship.x));
-
+        function updateSpaceship() {
             if (spaceship.shieldActive) {
                 spaceship.shieldTimer -= deltaTime;
                 if (spaceship.shieldTimer <= 0) {
                     spaceship.shieldActive = false;
                 }
             }
+
+            if (spaceship.rapidFireActive) {
+                spaceship.rapidFireTimer -= deltaTime;
+                if (spaceship.rapidFireTimer <= 0) {
+                    spaceship.rapidFireActive = false;
+                }
+            }
         }
 
-        function updateAliens(deltaTime) {
-            let changeDirection = false;
-            let leftmostAlien = canvas.width;
-            let rightmostAlien = 0;
-
+        function updateAliens() {
+            let moveDown = false;
             aliens.forEach(alien => {
-                alien.x += alien.speed * alienDirection * deltaTime * 60;
-                leftmostAlien = Math.min(leftmostAlien, alien.x);
-                rightmostAlien = Math.max(rightmostAlien, alien.x + alien.width);
+                alien.x += alienDirection * alienDropSpeed;
+                if (alien.x <= 0 || alien.x + alien.width >= canvas.width) {
+                    moveDown = true;
+                }
             });
 
-            if (leftmostAlien <= 0 || rightmostAlien >= canvas.width) {
-                changeDirection = true;
-            }
-
-            if (changeDirection) {
+            if (moveDown) {
                 alienDirection *= -1;
                 aliens.forEach(alien => {
                     alien.y += alienAdvanceDistance;
                 });
+            }
+
+            if (Math.random() < 0.02) {
+                const shooter = aliens[Math.floor(Math.random() * aliens.length)];
+                bullets.push({
+                    x: shooter.x + shooter.width / 2,
+                    y: shooter.y + shooter.height,
+                    width: 2,
+                    height: 10,
+                    speed: -5
+                });
+            }
+
+            if (aliens.length === 0) {
+                if (level % 5 === 0 && !boss) {
+                    spawnBoss();
+                } else {
+                    levelUp();
+                }
             }
 
             if (Math.random() < 0.001) {
@@ -314,14 +305,64 @@
             }
         }
 
-        function updateBullets(deltaTime) {
+        function updateBullets() {
             bullets.forEach((bullet, index) => {
-                bullet.y -= bullet.speed * deltaTime * 60;
-                if (bullet.y < 0) bullets.splice(index, 1);
+                bullet.y -= bullet.speed;
+
+                if (bullet.y < 0 || bullet.y > canvas.height) {
+                    bullets.splice(index, 1);
+                    return;
+                }
+
+                if (bullet.speed > 0) {  // Player bullet
+                    aliens.forEach((alien, alienIndex) => {
+                        if (checkCollision(bullet, alien)) {
+                            bullets.splice(index, 1);
+                            alien.health--;
+                            if (alien.health <= 0) {
+                                if (alien.type === ALIEN_TYPES.EXPLOSIVE) {
+                                    createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2, true);
+                                    destroyAdjacentAliens(alien);
+                                } else {
+                                    createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
+                                }
+                                aliens.splice(alienIndex, 1);
+                                score += alien.type === ALIEN_TYPES.TOUGH ? 20 : 10;
+                            }
+                            playSound(sounds.explosion);
+                        }
+                    });
+
+                    if (boss && checkCollision(bullet, boss)) {
+                        bullets.splice(index, 1);
+                        boss.health--;
+                        if (boss.health <= 0) {
+                            createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, true);
+                            boss = null;
+                            score += 1000;
+                            levelUp();
+                            playSound(sounds.bossDeath);
+                        } else {
+                            playSound(sounds.explosion);
+                        }
+                    }
+                } else {  // Alien bullet
+                    if (checkCollision(bullet, spaceship)) {
+                        bullets.splice(index, 1);
+                        if (!spaceship.shieldActive) {
+                            lives--;
+                            if (lives <= 0) {
+                                gameOver();
+                            }
+                        }
+                        createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
+                        playSound(sounds.explosion);
+                    }
+                }
             });
         }
 
-        function updateExplosions(deltaTime) {
+        function updateExplosions() {
             explosions.forEach((explosion, index) => {
                 explosion.timer -= deltaTime;
                 if (explosion.timer <= 0) {
@@ -330,85 +371,14 @@
             });
         }
 
-        function updatePowerUps(deltaTime) {
+        function updatePowerUps() {
             powerUps.forEach((powerUp, index) => {
-                powerUp.y += powerUp.speed * deltaTime * 60;
+                powerUp.y += powerUp.speed;
                 if (powerUp.y > canvas.height) {
                     powerUps.splice(index, 1);
+                    return;
                 }
-            });
-        }
 
-        function updateBoss(deltaTime) {
-            boss.x += boss.speed * deltaTime * 60;
-            if (boss.x <= 0 || boss.x + boss.width >= canvas.width) {
-                boss.speed *= -1;
-            }
-
-            boss.shootTimer -= deltaTime;
-            if (boss.shootTimer <= 0) {
-                bossShooting();
-                boss.shootTimer = 2;
-            }
-        }
-
-        function checkCollisions() {
-            bullets.forEach((bullet, bulletIndex) => {
-                aliens.forEach((alien, alienIndex) => {
-                    if (checkCollision(bullet, alien)) {
-                        bullets.splice(bulletIndex, 1);
-                        alien.health--;
-
-                        if (alien.health <= 0) {
-                            if (alien.type === ALIEN_TYPES.EXPLOSIVE) {
-                                createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2, true);
-                                destroyAdjacentAliens(alien);
-                            } else {
-                                createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2);
-                            }
-                            aliens.splice(alienIndex, 1);
-                            score += alien.type === ALIEN_TYPES.TOUGH ? 30 : 10;
-                            playSound(sounds.explosion);
-                        }
-
-                        if (aliens.length === 0) {
-                            if (boss) {
-                                levelUp();
-                            } else {
-                                spawnBoss();
-                            }
-                        }
-                    }
-                });
-
-                if (boss && checkCollision(bullet, boss)) {
-                    bullets.splice(bulletIndex, 1);
-                    boss.health--;
-                    if (boss.health <= 0) {
-                        createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, true);
-                        boss = null;
-                        score += 100;
-                        levelUp();
-                        playSound(sounds.bossDeath);
-                    } else {
-                        playSound(sounds.explosion);
-                    }
-                }
-            });
-
-            aliens.forEach(alien => {
-                if (checkCollision(alien, spaceship) || alien.y + alien.height >= canvas.height) {
-                    if (!spaceship.shieldActive) {
-                        lives--;
-                        createExplosion(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2);
-                        playSound(sounds.explosion);
-                        if (lives <= 0) gameOver();
-                        else resetLevel();
-                    }
-                }
-            });
-
-            powerUps.forEach((powerUp, index) => {
                 if (checkCollision(powerUp, spaceship)) {
                     applyPowerUp(powerUp.type);
                     powerUps.splice(index, 1);
@@ -471,69 +441,64 @@
                     lives++;
                     break;
                 case POWERUP_TYPES.RAPID_FIRE:
-                    // Implement rapid fire logic here
+                    spaceship.rapidFireActive = true;
+                    spaceship.rapidFireTimer = 10;
                     break;
             }
         }
 
         function spawnBoss() {
             boss = {
-                x: canvas.width / 2 - 100,
+                x: canvas.width / 2 - 75,
                 y: 50,
-                width: 200,
+                width: 150,
                 height: 100,
+                health: 50,
                 speed: 2,
-                health: 20,
-                shootTimer: 2
+                direction: 1
             };
         }
 
-        function bossShooting() {
-            for (let i = 0; i < 3; i++) {
+        function updateBoss() {
+            boss.x += boss.speed * boss.direction;
+            if (boss.x <= 0 || boss.x + boss.width >= canvas.width) {
+                boss.direction *= -1;
+            }
+
+            if (Math.random() < 0.05) {
                 bullets.push({
-                    x: boss.x + boss.width / 2 + (i - 1) * 30,
+                    x: boss.x + boss.width / 2,
                     y: boss.y + boss.height,
                     width: 4,
                     height: 15,
-                    speed: -5
+                    speed: -6
                 });
             }
         }
 
         function drawSpaceship() {
             ctx.fillStyle = '#30cfd0';
-            ctx.beginPath();
-            ctx.moveTo(spaceship.x + spaceship.width / 2, spaceship.y);
-            ctx.lineTo(spaceship.x, spaceship.y + spaceship.height);
-            ctx.lineTo(spaceship.x + spaceship.width, spaceship.y + spaceship.height);
-            ctx.closePath();
-            ctx.fill();
+            ctx.fillRect(spaceship.x, spaceship.y, spaceship.width, spaceship.height);
 
             if (spaceship.shieldActive) {
-                ctx.strokeStyle = 'rgba(48, 207, 208, 0.5)';
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.arc(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2, spaceship.width / 2 + 10, 0, Math.PI * 2);
+                ctx.arc(spaceship.x + spaceship.width / 2, spaceship.y + spaceship.height / 2, spaceship.width / 2 + 5, 0, Math.PI * 2);
                 ctx.stroke();
             }
         }
 
         function drawAliens() {
             aliens.forEach(alien => {
-                ctx.fillStyle = alien.type === ALIEN_TYPES.EXPLOSIVE ? '#ff4136' :
-                                alien.type === ALIEN_TYPES.TOUGH ? '#ffdc00' : '#7fdbff';
+                ctx.fillStyle = alien.type === ALIEN_TYPES.TOUGH ? '#ff0000' : 
+                                alien.type === ALIEN_TYPES.EXPLOSIVE ? '#ffff00' : '#00ff00';
                 ctx.fillRect(alien.x, alien.y, alien.width, alien.height);
-
-                // Draw alien details
-                ctx.fillStyle = '#000';
-                ctx.fillRect(alien.x + 5, alien.y + 10, 5, 5);
-                ctx.fillRect(alien.x + 20, alien.y + 10, 5, 5);
-                ctx.fillRect(alien.x + 5, alien.y + 20, 20, 3);
             });
         }
 
         function drawBullets() {
-            ctx.fillStyle = '#fff';
+            ctx.fillStyle = '#ffffff';
             bullets.forEach(bullet => {
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
             });
@@ -541,51 +506,39 @@
 
         function drawExplosions() {
             explosions.forEach(explosion => {
-                const gradient = ctx.createRadialGradient(explosion.x, explosion.y, 0, explosion.x, explosion.y, explosion.radius);
-                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-                gradient.addColorStop(0.8, 'rgba(255, 165, 0, 1)');
-                gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-
-                ctx.fillStyle = gradient;
+                ctx.fillStyle = `rgba(255, 165, 0, ${explosion.timer})`;
                 ctx.beginPath();
                 ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
                 ctx.fill();
-                explosion.radius = (explosion.maxRadius - explosion.radius) * 0.1 + explosion.radius;
+                explosion.radius = explosion.maxRadius * (1 - explosion.timer / 0.5);
             });
         }
 
         function drawPowerUps() {
             powerUps.forEach(powerUp => {
-                ctx.fillStyle = powerUp.type === POWERUP_TYPES.SHIELD ? '#30cfd0' :
-                                powerUp.type === POWERUP_TYPES.EXTRA_LIFE ? '#ff4136' : '#ffdc00';
-                ctx.beginPath();
-                ctx.arc(powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2, powerUp.width / 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Draw power-up symbol
-                ctx.fillStyle = '#000';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(powerUp.type === POWERUP_TYPES.SHIELD ? 'S' :
-                             powerUp.type === POWERUP_TYPES.EXTRA_LIFE ? '+' : 'R',
-                             powerUp.x + powerUp.width / 2, powerUp.y + powerUp.height / 2);
+                switch (powerUp.type) {
+                    case POWERUP_TYPES.SHIELD:
+                        ctx.fillStyle = '#00ffff';
+                        break;
+                    case POWERUP_TYPES.EXTRA_LIFE:
+                        ctx.fillStyle = '#ff00ff';
+                        break;
+                    case POWERUP_TYPES.RAPID_FIRE:
+                        ctx.fillStyle = '#ffff00';
+                        break;
+                }
+                ctx.fillRect(powerUp.x, powerUp.y, powerUp.width, powerUp.height);
             });
         }
 
         function drawBoss() {
-            ctx.fillStyle = '#ff6b6b';
+            ctx.fillStyle = '#ff0000';
             ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
 
-            // Draw boss details
-            ctx.fillStyle = '#000';
-            ctx.fillRect(boss.x + 30, boss.y + 20, 30, 20);
-            ctx.fillRect(boss.x + 140, boss.y + 20, 30, 20);
-            ctx.fillRect(boss.x + 60, boss.y + 70, 80, 10);
-
             // Draw boss health bar
-            ctx.fillStyle = '#2ecc40';
-            ctx.fillRect(boss.x, boss.y - 10, (boss.width * boss.health) / 20, 5);
+            ctx.fillStyle = '#00ff00';
+            const healthBarWidth = (boss.health / 50) * boss.width;
+            ctx.fillRect(boss.x, boss.y - 10, healthBarWidth, 5);
         }
 
         function updateInfoPanel() {
@@ -597,19 +550,8 @@
 
         function levelUp() {
             level++;
-            alienDirection = 1;
             alienDropSpeed += 0.1;
-            alienAdvanceDistance += 5;
-            createAliens();
-        }
-
-        function resetLevel() {
-            spaceship.x = canvas.width / 2;
-            aliens = [];
-            bullets = [];
-            explosions = [];
-            powerUps = [];
-            boss = null;
+            alienAdvanceDistance += 2;
             createAliens();
         }
 
@@ -617,17 +559,25 @@
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem('highScore', highScore);
-                updateLeaderboard(score);
             }
+            updateLeaderboard(score);
+            showLeaderboard();
+            resetGame();
+        }
 
-            alert(`Game Over! Your score: ${score}`);
+        function resetGame() {
+            spaceship.x = canvas.width / 2;
+            aliens = [];
+            bullets = [];
+            explosions = [];
+            powerUps = [];
+            boss = null;
             score = 0;
             level = 1;
             lives = 3;
-            alienDirection = 1;
             alienDropSpeed = 0.5;
             alienAdvanceDistance = 20;
-            resetLevel();
+            createAliens();
         }
 
         function updateLeaderboard(newScore) {
@@ -642,13 +592,11 @@
             const leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
             const leaderboardList = document.getElementById('leaderboard-list');
             leaderboardList.innerHTML = '';
-
             leaderboard.forEach((score, index) => {
                 const li = document.createElement('li');
                 li.textContent = `${index + 1}. ${score}`;
                 leaderboardList.appendChild(li);
             });
-
             document.getElementById('leaderboard').style.display = 'block';
         }
 

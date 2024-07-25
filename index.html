@@ -71,10 +71,16 @@
         let alienDropSpeed = 0.5;
 
         function initGame() {
-            document.addEventListener('keydown', handleKeyPress);
-            document.addEventListener('keyup', handleKeyRelease);
-            createAliens();
-            requestAnimationFrame(gameLoop);
+            try {
+                console.log("Initializing game...");
+                document.addEventListener('keydown', handleKeyPress);
+                document.addEventListener('keyup', handleKeyRelease);
+                createAliens();
+                requestAnimationFrame(gameLoop);
+                console.log("Game initialized successfully");
+            } catch (error) {
+                console.error("Error initializing game:", error);
+            }
         }
 
         function handleKeyPress(e) {
@@ -114,25 +120,29 @@
         }
 
         function gameLoop(currentTime) {
-            const deltaTime = (currentTime - lastTime) / 1000;
-            lastTime = currentTime;
+            try {
+                const deltaTime = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            updateSpaceship(deltaTime);
-            updateAliens(deltaTime);
-            updateBullets(deltaTime);
-            updateExplosions(deltaTime);
-            checkCollisions();
+                updateSpaceship(deltaTime);
+                updateAliens(deltaTime);
+                updateBullets(deltaTime);
+                updateExplosions(deltaTime);
+                checkCollisions();
 
-            drawSpaceship();
-            drawAliens();
-            drawBullets();
-            drawExplosions();
+                drawSpaceship();
+                drawAliens();
+                drawBullets();
+                drawExplosions();
 
-            updateInfoPanel();
+                updateInfoPanel();
 
-            requestAnimationFrame(gameLoop);
+                requestAnimationFrame(gameLoop);
+            } catch (error) {
+                console.error("Error in game loop:", error);
+            }
         }
 
         function updateSpaceship(deltaTime) {
@@ -289,7 +299,7 @@
             }, 3000);
         }
 
-        initGame();
+        window.onload = initGame;
     </script>
 </body>
 </html>
